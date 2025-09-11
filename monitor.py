@@ -188,13 +188,17 @@ def main():
     urls = config.get("urls", [])
     hosts = config.get("hosts-ssh", [])
 
-    for entry in urls:
-        code, message = check_api(entry["url"], entry.get("checkJson", False), entry.get("checkText", False))
-        sendMessage(entry["name"], entry["url"], code, message)
+    # if urls is iterable
+    if urls:
+        for entry in urls:
+            code, message = check_api(entry["url"], entry.get("checkJson", False), entry.get("checkText", False))
+            sendMessage(entry["name"], entry["url"], code, message)
 
-    for host in hosts:
-        code, message = check_ssh(host)
-        sendMessage(host, host, code, message)
+    # if hosts is iterable
+    if hosts:
+        for host in hosts:
+            code, message = check_ssh(host)
+            sendMessage(host, host, code, message)
 
 if __name__ == "__main__":
     main()
