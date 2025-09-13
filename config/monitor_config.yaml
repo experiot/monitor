@@ -1,19 +1,19 @@
 # Example configuration file for service monitoring
 # Change the values according to your environment
 CLIENT_NAME: "phoenix3"
-STATUS_DIR: "/home/user/status_files/"
+STATUS_DIR: "./statuses/"
 DEFAULT_TIMEOUT_MS: 5000
 PUSHOVER_API_TOKEN: "token"
 PUSHOVER_USER_KEY: "key"
 urls:
-  - name: "api_chirpstack"
-    url: "http://mychirpstack:8090/"
-    checkJson: false
-    checkText: true
   - name: "api_cloud_signomix"
     url: "https://cloud.signomix.com/api/core/info"
     checkJson: true
-    checkText: false
+  - name: "example_webpage"
+    url: "https://example.com"
+    checkText: true
+    okText: "Example Domain"
+    errorText: "ERROR"
 hosts-ssh:
-  - "host1.com"
-  - "host2.com"
+#  - "host1.com"
+#  - "host2.com"

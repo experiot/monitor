@@ -1,45 +1,33 @@
+"""
+Program: Service Monitoring (web content, REST API and SSH)
 
-"""Program: Monitorowanie usług (REST API i SSH) z powiadomieniami Pushover
+Description:
+    This program is used to monitor the availability of selected web pages content, REST API services and SSH ports on specified hosts.
+    If the status changes (e.g. the service stops responding or becomes available again), the program saves
+    the current state to a file and sends a notification via the Pushover service.
 
-Opis:
-    Ten program służy do monitorowania dostępności wybranych usług REST API oraz portów SSH na wskazanych hostach.
-    W przypadku zmiany statusu (np. usługa przestaje odpowiadać lub ponownie staje się dostępna), program zapisuje
-    aktualny stan do pliku oraz wysyła powiadomienie przez usługę Pushover.
+Features:
+    - Checks the availability of the SSH port (22) on specified hosts.
+    - Checks for HTTP response from selected web pages or REST API endpoints.
+    - Status changes are saved to files in the STATUS_DIR directory.
+    - If the status changes, a notification is sent via configured channels.
 
-Funkcjonalności:
-    - Sprawdza dostępność portu SSH (22) na zadanych hostach.
-    - Sprawdza odpowiedź HTTP (status 200) wybranych endpointów REST API.
-    - Zmiany statusu są zapisywane do plików w katalogu STATUS_DIR.
-    - W przypadku zmiany statusu wysyłane jest powiadomienie przez Pushover (jeśli skonfigurowano token i user key).
+Configuration: see monitor_config.yaml
 
-Konfiguracja:
-    - STATUS_DIR: Katalog, w którym zapisywane są pliki statusów.
-    - DEFAULT_TIMEOUT_MS: Domyślny timeout dla sprawdzeń (w milisekundach).
-    - CLIENT_NAME: Nazwa klienta lub aplikacji, która monitoruje usługi.
-    - PUSHOVER_API_TOKEN: Token aplikacji Pushover.
-    - PUSHOVER_USER_KEY: Klucz użytkownika Pushover.
+Main functions:
+    - check_ssh(host, timeout_ms): Checks SSH port availability on a host.
+    - check_api(url): Checks REST API endpoint availability.
+    - sendMessage(name, url, code, message): Handles status file writing and notification sending.
+    - main(): Main function to run checks.
 
-Główne funkcje:
-    - check_ssh(host, timeout_ms): Sprawdza dostępność portu SSH na hoście.
-    - check_api(url): Sprawdza dostępność endpointu REST API.
-    - send_pushover_message(token, user, title, message): Wysyła powiadomienie przez Pushover.
-    - sendMessage(name, url, code, message): Obsługuje zapis statusu i wysyłkę powiadomień.
-    - main(): Główna funkcja uruchamiająca sprawdzenia.
+To run the program cyclically, e.g. every 5 minutes, you can use the crontab scheduler in Linux.
+To do this, add an appropriate entry to the user's crontab file, e.g.:
 
-Użycie:
-    Uruchom program. Wyniki sprawdzeń oraz ewentualne powiadomienia pojawią się w konsoli oraz (w przypadku zmiany statusu) w aplikacji Pushover.
+    */5 * * * * /usr/bin/python3 /path/to/script/monitoring.py /path/to/config.yaml
 
-Autor: Grzegorz Skorupa
-Data: 2025-08-12
-
-Aby uruchamiać program cyklicznie, np. co 5 minut, można użyć harmonogramu zadań crontab w systemie Linux.
-W tym celu należy dodać odpowiedni wpis do pliku crontab użytkownika, np.:
-
-    */5 * * * * /usr/bin/python3 /ścieżka/do/skryptu/monitoring.py /ścieżka/do/konfiguracji.yaml
-
-Powyższy wpis spowoduje automatyczne uruchamianie programu co 5 minut.
-Upewnij się, że ścieżka do interpretera Python oraz do pliku programu jest poprawna.
-Wyniki działania oraz powiadomienia będą generowane zgodnie z konfiguracją programu.
+The above entry will automatically run the program every 5 minutes.
+Make sure the path to the Python interpreter and the program file is correct.
+The results and notifications will be generated according to the program configuration.
 """
 import socket
 import requests
@@ -56,9 +44,9 @@ def load_config(config_path):
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
-# Pobierz ścieżkę do pliku konfiguracyjnego z argumentu wywołania
+# Get the path to the configuration file from the command-line argument
 if len(sys.argv) < 2:
-    print("Podaj ścieżkę do pliku konfiguracyjnego YAML jako pierwszy argument!")
+    print("Please provide the path to the YAML configuration file as the first argument!")
     sys.exit(1)
 config_path = sys.argv[1]
 load_config(config_path)
@@ -71,7 +59,7 @@ try:
         PUSHOVER_API_TOKEN = config.get("PUSHOVER_API_TOKEN", "")
         PUSHOVER_USER_KEY = config.get("PUSHOVER_USER_KEY", "")
     else:
-        CLIENT_NAME = "phoenix3"
+        CLIENT_NAME = "myhost"
         STATUS_DIR = "/tmp/status_files/"
         DEFAULT_TIMEOUT_MS = 5000
         PUSHOVER_API_TOKEN = ""
@@ -82,12 +70,12 @@ except Exception as e:
 
 def check_ssh(host, timeout_ms=DEFAULT_TIMEOUT_MS):
     """
-    Sprawdza dostępność portu SSH (22) na danym hoście.
-    Zwraca (200, "OK") jeśli port otwarty, w przeciwnym razie (kod, opis).
+    Checks the availability of the SSH port (22) on the given host.
+    Returns (200, "OK") if the port is open, otherwise (code, description).
     """
     timeout_sec = timeout_ms / 1000.0
     try:
-        # Najpierw sprawdź czy port 22 jest otwarty
+        # First, check if port 22 is open
         with socket.create_connection((host, 22), timeout=timeout_sec):
             pass
     except (socket.timeout, TimeoutError):
@@ -95,8 +83,8 @@ def check_ssh(host, timeout_ms=DEFAULT_TIMEOUT_MS):
     except Exception as e:
         return -1, f"Port 22 error: {e}"
 
-    # Opcjonalnie: sprawdź czy można się zalogować (np. przez ssh-keyscan lub próbę połączenia bez hasła)
-    # Tu tylko sprawdzenie baneru ssh (nie wymaga klucza)
+    # Optionally: check if you can log in (e.g. via ssh-keyscan or a passwordless connection attempt)
+    # Here, only SSH banner check (does not require a key)
     # try:
     #     result = subprocess.run([
     #         "ssh", "-oBatchMode=yes", "-oConnectTimeout=3", f"{host}", "exit"
@@ -113,11 +101,11 @@ def check_ssh(host, timeout_ms=DEFAULT_TIMEOUT_MS):
 
 def send_pushover_message(token, user, title, message):
     """
-    Wysyła powiadomienie przez Pushover API.
-    :param token: API token aplikacji Pushover
-    :param user: User key Pushover
-    :param title: Tytuł powiadomienia
-    :param message: Treść powiadomienia
+    Sends a notification via the Pushover API.
+    :param token: Pushover application API token
+    :param user: Pushover user key
+    :param title: Notification title
+    :param message: Notification content
     """
     url = "https://api.pushover.net/1/messages.json"
     data = {
@@ -129,13 +117,13 @@ def send_pushover_message(token, user, title, message):
     try:
         response = requests.post(url, data=data, timeout=10)
         if response.status_code == 200:
-            print("Pushover: Powiadomienie wysłane.")
+            print("Pushover: Notification sent.")
         else:
-            print(f"Pushover: Błąd wysyłania powiadomienia: {response.status_code} {response.text}")
+            print(f"Pushover: Error sending notification: {response.status_code} {response.text}")
     except Exception as e:
-        print(f"Pushover: Wyjątek podczas wysyłania powiadomienia: {e}")
+        print(f"Pushover: Exception while sending notification: {e}")
 
-def check_api(url, checkJson, checkText):
+def check_api(url, checkJson, checkText, okText, errorText):
     try:
         response = requests.get(url, timeout=DEFAULT_TIMEOUT_MS / 1000.0)
         if response.status_code == 200:
@@ -146,9 +134,12 @@ def check_api(url, checkJson, checkText):
                 except json.JSONDecodeError:
                     return response.status_code, f"Invalid JSON response: {response.status_code}"
             elif checkText:
-                # find "500" in response text
-                if "500" in response.text:
-                    return response.status_code, f"500 found in response text: {response.text }"
+                # okText is not null and not empty
+                if okText and okText not in response.text:
+                    return response.status_code, f"Required text not found"
+                # errorText is not null and not empty
+                if errorText and errorText in response.text:
+                    return response.status_code, f"Error"
             return 200, "OK"
         else:
             return response.status_code, f"Unexpected status: {response.status_code}"
@@ -156,6 +147,13 @@ def check_api(url, checkJson, checkText):
         return DEFAULT_TIMEOUT_MS, "Timeout"
     except Exception as e:
         return -1, f"Error: {e}"
+
+# Sprawdzanie obecności ciągu znaków w tekście
+def check_text_presence(text, substring, required):
+    if required:
+        return substring in text
+    else:
+        return substring not in text
 
 def sendMessage(name, url, code, message):
     if not os.path.exists(STATUS_DIR):
@@ -174,15 +172,15 @@ def sendMessage(name, url, code, message):
 
     if prev_code != str(code):
         print(f"[{name}] Status changed: {code} {message} ({CLIENT_NAME})")
-        # jeśli nie są puste zmienne PUSHOVER_API_TOKEN i PUSHOVER_USER_KEY
-        # to wyślij powiadomienie przez Pushover
+        # if PUSHOVER_API_TOKEN and PUSHOVER_USER_KEY are not empty
+        # then send a notification via Pushover
         if PUSHOVER_API_TOKEN and PUSHOVER_USER_KEY:
             send_pushover_message(PUSHOVER_API_TOKEN, PUSHOVER_USER_KEY, f"{name} error", f"{code} {message} ({CLIENT_NAME})")
 
 def main():
     # Ensure config is loaded and is a dict before accessing its attributes
     if config is None or not isinstance(config, dict):
-        print("Błąd: Konfiguracja nie została poprawnie załadowana lub jest nieprawidłowa.")
+        print("Error: Configuration was not loaded correctly or is invalid.")
         sys.exit(1)
 
     urls = config.get("urls", [])
@@ -191,7 +189,7 @@ def main():
     # if urls is iterable
     if urls:
         for entry in urls:
-            code, message = check_api(entry["url"], entry.get("checkJson", False), entry.get("checkText", False))
+            code, message = check_api(entry["url"], entry.get("checkJson", False), entry.get("checkText", False), entry.get("okText", None), entry.get("errorText", None))
             sendMessage(entry["name"], entry["url"], code, message)
 
     # if hosts is iterable
