@@ -70,7 +70,7 @@ def check_ssh(entry):
         with socket.create_connection((entry["host"], 22), timeout=timeout_sec):
             pass
     except (socket.timeout, TimeoutError):
-        return timeout_ms, "Timeout"
+        return timeout_sec, "Timeout"
     except Exception as e:
         return 503, f"Port 22 error: {e}"
 
@@ -174,10 +174,10 @@ def check_api(url, checkJson, checkText, okText, errorText):
             elif checkText:
                 # okText is not null and not empty
                 if okText and okText not in response.text:
-                    return response.status_code, f"Required text not found"
+                    return response.status_code, "Required text not found"
                 # errorText is not null and not empty
                 if errorText and errorText in response.text:
-                    return response.status_code, f"Error"
+                    return response.status_code, "Error"
             return 200, "OK"
         else:
             return response.status_code, f"Unexpected status: {response.status_code}"
