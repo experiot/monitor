@@ -1,19 +1,42 @@
 # Example configuration file for service monitoring
 # Change the values according to your environment
-CLIENT_NAME: "phoenix3"
+CLIENT_NAME: "dev_environment"
 STATUS_DIR: "./statuses/"
 DEFAULT_TIMEOUT_MS: 5000
 PUSHOVER_API_TOKEN: "token"
 PUSHOVER_USER_KEY: "key"
+SILENT_MODE: true # if true then not logs will be printed to stdout (default: false)
+
 urls:
-  - name: "api_cloud_signomix"
-    url: "https://cloud.signomix.com/api/core/info"
+  - name: "service1_api"
+    url: "https://myservice.com/api/core/info"
     checkJson: true
+    # okWebhook: "webhook1"
+    # errorWebhook: "webhook2"
   - name: "example_webpage"
     url: "https://example.com"
     checkText: true
     okText: "Example Domain"
     errorText: "ERROR"
-hosts-ssh:
-#  - "host1.com"
-#  - "host2.com"
+    okWebhook: "webhook1"
+    errorWebhook: "webhook2"
+
+hosts:
+#  - name: "host1.com"
+#    host: "host1.com"
+#    user: "user1" # not implemented yet
+#  - name: "host2.com"
+#    host: "host2.com"
+#    user: "user2" # not implemented yet
+webhooks:
+# - name: "ntfy"
+#   url: "https://ntfy.sh"
+#   method: "POST"
+#   headers:
+#     Content-Type: "application/json"
+#     Authorization: "Bearer token"
+#   body:
+#     topic: "test"
+#     title: "Service Status"
+#     message: "code:{code} {message}"
+#     priority: 3
