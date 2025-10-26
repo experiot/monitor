@@ -1,0 +1,49 @@
+---
+- name: Deployment skryptu monitora na zdalne hosty
+  hosts: monitor_hosts
+  become: true # Użycie uprawnień roota (sudo) dla pewności wykonania
+  vars:
+    pi_remote_path: /home/pi # Docelowy katalog na eerry Pi
+    user_to_run: pi # Użytkownik, który będzie właścicielem plików i zadania cron
+
+  tasks:
+    # KROK 1: Wgrywanie plików na hosta
+    - name: 1.1 Wgraj plik konfiguracyjny myconfig.yml
+      ansible.builtin.copy:
+        src: ~/.secrets/monitor_config.yaml
+        dest: "{{ pi_remote_path }}/.secrets/monitor_config.yaml"
+        owner: "{{ user_to_run }}"
+        mode: "0644"
+
+    - name: 1.2 Wgraj skrypt do uruchomienia i nadaj uprawnienia
+      ansible.builtin.copy:
+        src: clone-monitor-repo.sh
+        dest: "{{ pi_remote_path }}/clone-monitor-repo.sh"
+        owner: "{{ user_to_run }}"
+        mode: "0755" # Nadanie uprawnień do wykonania (execute)
+
+    # KROK 2: Uruchomienie skryptu myscript.sh
+    - name: 2. Uruchom skrypt clone-monitor-repo.sh na hoście
+      ansible.builtin.command: "{{ pi_remote_path }}/clone-monitor-repo.sh"
+      # Używamy become_user, aby uruchomić skrypt jako użytkownik 'pi' (jeśli jest potrzebne)
+      become: true
+      become_user: "{{ user_to_run }}"
+      # Opcjonalnie: Wypisz stdout, aby zobaczyć rezultat
+      register: script_output
+
+    - name: Wyświetl wynik uruchomienia skryptu
+      ansible.builtin.debug:
+        var: script_output.stdout_lines
+
+    # KROK 3: Konfiguracja zadania Cron
+    #- name: 3. Utwórz zadanie Cron dla myscript2.sh
+    #  ansible.builtin.cron:
+    #    name: "Monthly report with parameter X"
+    #    user: "{{ user_to_run }}" # Użytkownik, dla którego ma być utworzone zadanie Cron
+    #    minute: "*/2"              # Co 2 minuty
+    #    hour: "*"                  
+    #    day: "*"                   
+    #    month: "*"                 
+    #    weekday: "*"               
+    #    job: "python3 {{ pi_remote_path }}/monitor/monitor.py {{ pi_remote_path }}/.secrets/monitor_config.yaml" # Pełne polecenie Cron z parametrem 'x'
+    #    state: present # Zapewnia, że zadanie istnieje (tworzy lub aktualizuje)

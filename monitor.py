@@ -50,9 +50,27 @@ def load_config(config_path):
             webhooks = config.get("webhooks", [])
             hosts = config.get("hosts", [])
             urls = config.get("urls", [])
-            sDir = config.get("STATUS_DIR", "/tmp/status_files/")
+            # Determine STATUS_DIR: if provided in config use it, otherwise
+            # create a 'monitor_status' subfolder next to this script.
+            sDir = config.get("STATUS_DIR")
+            if not sDir:
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                sDir = os.path.join(script_dir, "monitor_status")
+            # Ensure the status directory exists
+            try:
+                os.makedirs(sDir, exist_ok=True)
+            except Exception as e:
+                print_log(f"Warning: Could not create status directory {sDir}: {e}")
+
             sMode = config.get("SILENT_MODE", False)
-            sClient = config.get("CLIENT_NAME", "dev_env")
+            # Determine CLIENT_NAME: if provided use it, otherwise fall back to hostname
+            sClient = config.get("CLIENT_NAME")
+            if not sClient:
+                try:
+                    sClient = socket.gethostname()
+                except Exception as e:
+                    print_log(f"Warning: Could not retrieve hostname, using default: {e}")
+                    sClient = "monitor_client"
     except Exception as e:
         print_log(f"Error loading config: {e}")
         sys.exit(1)
