@@ -311,7 +311,7 @@ Contributions welcome! Please:
 
 ## License
 
-[Specify your license here - e.g., MIT, GPL, etc.]
+MIT License. See LICENSE file for details.
 
 ## Support
 
