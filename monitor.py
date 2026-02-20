@@ -2,7 +2,8 @@
 Program: Service Monitoring (web content, REST API and SSH)
 
 Description:
-    This program is used to monitor the availability of selected web pages content, REST API services and SSH ports on specified hosts.
+    This program is used to monitor the availability of selected web pages content,
+    REST API services and SSH ports on specified hosts.
     If the status changes (e.g. the service stops responding or becomes available again), the program saves
     the current state to a file and sends a notification via a webhook service.
 
@@ -36,6 +37,7 @@ import json
 import yaml
 import sys
 import smtplib
+import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -50,6 +52,7 @@ def load_config(config_path):
             webhooks = config.get("webhooks", [])
             hosts = config.get("hosts", [])
             urls = config.get("urls", [])
+            email_config = config.get("email", {})
             # Determine STATUS_DIR: if provided in config use it, otherwise
             # create a 'monitor_status' subfolder next to this script.
             sDir = config.get("STATUS_DIR")
@@ -75,7 +78,7 @@ def load_config(config_path):
         print_log(f"Error loading config: {e}")
         sys.exit(1)
 
-    return urls, hosts, webhooks, sDir, sMode, sClient
+    return urls, hosts, webhooks, email_config, sDir, sMode, sClient
 
 def check_ssh(entry):
     """
@@ -109,6 +112,9 @@ def check_ssh(entry):
     return 200, "SSH OK"
 
 def print_list(items):
+    if items is None:
+        print_log("List: 0")
+        return
     print_log(f"List: {len(items)}")
     for item in items:
         print_log(f"- {item}")
@@ -160,7 +166,21 @@ def send_webhook_message(entry, code, message, client_name):
     except Exception as e:
         print_log(f"Webhook: Exception while sending notification: {e}")
 
-def send_gmail(sender_email, app_password, recipient_email, subject, body):
+def send_smtp_email(sender_email, password, recipient_email, subject, body, 
+                   smtp_server="smtp.gmail.com", smtp_port=587, use_ssl=False):
+    """
+    Send email using SMTP (works with Gmail and other SMTP servers)
+    
+    Args:
+        sender_email: Email address of the sender
+        password: Email password or app password
+        recipient_email: Email address of the recipient
+        subject: Email subject
+        body: Email body text
+        smtp_server: SMTP server address (default: smtp.gmail.com)
+        smtp_port: SMTP server port (default: 587)
+        use_ssl: Use SSL instead of STARTTLS (default: False)
+    """
     # Create the email
     msg = MIMEMultipart()
     msg["From"] = sender_email
@@ -169,15 +189,59 @@ def send_gmail(sender_email, app_password, recipient_email, subject, body):
     msg.attach(MIMEText(body, "plain"))
 
     try:
-        # Connect to Gmail SMTP server
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login(sender_email, app_password)
+        if use_ssl:
+            # Use SSL connection (typically port 465)
+            server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+        else:
+            # Use STARTTLS connection (typically port 587)
+            server = smtplib.SMTP(smtp_server, smtp_port)
+            server.starttls()
+        
+        server.login(sender_email, password)
         server.sendmail(sender_email, recipient_email, msg.as_string())
         server.quit()
-        print("Email sent successfully!")
+        print_log("Email sent successfully!")
     except Exception as e:
-        print(f"Error sending email: {e}")
+        print_log(f"Error sending email: {e}")
+
+def send_email_notification(service_name, code, message, client_name):
+    """
+    Send email notification using SMTP (works with any SMTP server)
+    """
+    if not email_config:
+        print_log("Email configuration not found, skipping email notification")
+        return
+    
+    sender_email = email_config.get("sender_email")
+    password = email_config.get("password") or email_config.get("app_password")  # Backward compatibility
+    recipient_email = email_config.get("recipient_email")
+    subject_template = email_config.get("subject", "Service Monitoring Alert: {service}")
+    
+    # SMTP server configuration (with defaults for Gmail)
+    smtp_server = email_config.get("smtp_server", "smtp.gmail.com")
+    smtp_port = email_config.get("smtp_port", 587)
+    use_ssl = email_config.get("use_ssl", False)
+    
+    if not all([sender_email, password, recipient_email]):
+        print_log("Email configuration incomplete, skipping email notification")
+        return
+    
+    # Replace placeholders in subject
+    subject = subject_template.replace("{service}", service_name)
+    subject = subject.replace("{code}", str(code))
+    subject = subject.replace("{message}", message)
+    subject = subject.replace("{client}", client_name)
+    
+    # Create email body
+    body = f"Service Monitoring Alert\n\n"
+    body += f"Service: {service_name}\n"
+    body += f"Client: {client_name}\n"
+    body += f"Status Code: {code}\n"
+    body += f"Message: {message}\n"
+    body += f"Timestamp: {datetime.datetime.now()}\n"
+    
+    send_smtp_email(sender_email, password, recipient_email, subject, body, 
+                   smtp_server, smtp_port, use_ssl)
 
 def check_api(url, checkJson, checkText, okText, errorText):
     try:
@@ -238,6 +302,8 @@ def get_webhook_definition(name):
     webhook_def = None
     print_log(f"name: {name}")
     print_log(f"webhooks: {webhooks}")
+    if webhooks is None:
+        return None
     for webhook in webhooks:
         if webhook['name'] == name:
             webhook_def = webhook
@@ -245,12 +311,13 @@ def get_webhook_definition(name):
     return webhook_def
 
 def main():
-    global config, webhooks, hosts, urls, SILENT_MODE, CLIENT_NAME, STATUS_DIR, DEFAULT_TIMEOUT_MS
+    global config, webhooks, hosts, urls, email_config, SILENT_MODE, CLIENT_NAME, STATUS_DIR, DEFAULT_TIMEOUT_MS
 
     config = {}
     urls = []
     webhooks = []
     hosts = []
+    email_config = {}
     DEFAULT_TIMEOUT_MS = 5000
     SILENT_MODE = False
     STATUS_DIR = "/tmp/status_files/"
@@ -262,7 +329,7 @@ def main():
         sys.exit(1)
 
     config_path = sys.argv[1]
-    urls, hosts, webhooks, STATUS_DIR, SILENT_MODE, CLIENT_NAME = load_config(config_path)
+    urls, hosts, webhooks, email_config, STATUS_DIR, SILENT_MODE, CLIENT_NAME = load_config(config_path)
 
     # Ensure config is loaded and is a dict before accessing its attributes
     if config is None: # or not isinstance(config, dict):
@@ -295,11 +362,22 @@ def main():
                 print_log(f"errorWebhookName: {errorWebhookName}")
                 if errorWebhookName:
                     webhook_def = get_webhook_definition(errorWebhookName)
-            if webhook_def:
-                print_log("Webhook found")
-                send_webhook_message(webhook_def, code, message, CLIENT_NAME)
-            else:
-                print_log(f"Webhook not found for {entry['url']}")
+                elif entry.get("emailConfigName"):
+                    # If no webhook defined but emailConfigName exists, this will be handled in email notification section
+                    pass
+                if webhook_def:
+                    print_log("Webhook found")
+                    send_webhook_message(webhook_def, code, message, CLIENT_NAME)
+                else:
+                    print_log(f"Webhook not found for {entry['url']}")
+            
+            # Send email notification if email configuration is available
+            # Always send email if email_config exists (backward compatibility)
+            # Additionally, log if emailConfigName is explicitly set when no webhook is defined
+            if email_config:
+                if not errorWebhookName and entry.get("emailConfigName"):
+                    print_log(f"emailConfigName found: {entry.get('emailConfigName')}")
+                send_email_notification(entry["name"], code, message, CLIENT_NAME)
 
     # if hosts is iterable
     if hosts:
@@ -320,11 +398,22 @@ def main():
                 print_log(f"errorWebhookName: {errorWebhookName}")
                 if errorWebhookName:
                     webhook_def = get_webhook_definition(errorWebhookName)
+                elif entry.get("emailConfigName"):
+                    # If no webhook defined but emailConfigName exists, this will be handled in email notification section
+                    pass
             if webhook_def:
                 print_log("Webhook found")
                 send_webhook_message(webhook_def, code, message, CLIENT_NAME)
             else:
                 print_log(f"Webhook not found for {entry['url']}")
+            
+            # Send email notification if email configuration is available
+            # Always send email if email_config exists (backward compatibility)
+            # Additionally, log if emailConfigName is explicitly set when no webhook is defined
+            if email_config:
+                if not errorWebhookName and entry.get("emailConfigName"):
+                    print_log(f"emailConfigName found: {entry.get('emailConfigName')}")
+                send_email_notification(entry["name"], code, message, CLIENT_NAME)
 
 
 if __name__ == "__main__":

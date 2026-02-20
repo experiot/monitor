@@ -1,0 +1,34 @@
+# Test configuration file for service monitoring with email enabled
+STATUS_DIR: "./statuses/"
+DEFAULT_TIMEOUT_MS: 5000
+SILENT_MODE: false
+
+# Email notification configuration (SMTP - Universal)
+email:
+  smtp_server: "smtp.gmail.com"
+  smtp_port: 587
+  use_ssl: false
+  sender_email: "test@gmail.com"
+  password: "test_app_password"
+  recipient_email: "recipient@example.com"
+  subject: "Service Monitoring Alert: {service}"
+
+urls:
+  - name: "example_webpage"
+    url: "https://example.com"
+    checkText: true
+    okText: "Example Domain"
+    errorText: "ERROR"
+
+hosts:
+  - name: "localhost_ssh"
+    host: "localhost"
+
+webhooks:
+  - name: "test_webhook"
+    url: "https://example.com/webhook"
+    method: "POST"
+    headers:
+      Content-Type: "application/json"
+    body:
+      message: "Test webhook: {code} {message}"

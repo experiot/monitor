@@ -1,11 +1,52 @@
 # Example configuration file for service monitoring
 # Change the values according to your environment
-CLIENT_NAME: "dev_environment"
-STATUS_DIR: "./statuses/"
+#CLIENT_NAME: "dev_environment" # optional is hostname
+STATUS_DIR: "./statuses/" # optional, default is "./monitor_status"
 DEFAULT_TIMEOUT_MS: 5000
 PUSHOVER_API_TOKEN: "token"
 PUSHOVER_USER_KEY: "key"
 SILENT_MODE: true # if true then not logs will be printed to stdout (default: false)
+
+# Email notification configuration (SMTP - works with Gmail and other providers)
+# Uncomment and configure to enable email notifications
+#email:
+#  smtp_server: "smtp.gmail.com"      # SMTP server address
+#  smtp_port: 587                     # SMTP port (587 for TLS, 465 for SSL)
+#  use_ssl: false                     # Use SSL instead of STARTTLS
+#  sender_email: "your@gmail.com"     # Your email address
+#  password: "your_password"         # Your email password or app password
+#  recipient_email: "recipient@example.com"  # Recipient email address
+#  subject: "Service Monitoring Alert: {service}"  # Email subject template
+
+# Example configurations for different providers:
+
+# Gmail (using App Password - recommended):
+#email:
+#  smtp_server: "smtp.gmail.com"
+#  smtp_port: 587
+#  use_ssl: false
+#  sender_email: "your@gmail.com"
+#  password: "your_app_password"     # Generate in Google Account settings
+#  recipient_email: "admin@example.com"
+#  subject: "ALERT: {service} status {code}"
+
+# Outlook/Hotmail:
+#email:
+#  smtp_server: "smtp.office365.com"
+#  smtp_port: 587
+#  use_ssl: false
+#  sender_email: "your@outlook.com"
+#  password: "your_password"
+#  recipient_email: "admin@example.com"
+
+# Custom SMTP server with SSL:
+#email:
+#  smtp_server: "mail.example.com"
+#  smtp_port: 465
+#  use_ssl: true
+#  sender_email: "monitor@example.com"
+#  password: "your_password"
+#  recipient_email: "admin@example.com"
 
 urls:
   - name: "service1_api"
